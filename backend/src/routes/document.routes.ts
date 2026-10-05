@@ -5,10 +5,15 @@ import { uploadDocument } from "../controllers/document.controller";
 
 const router = Router();
 
+// router.post(
+//     "/upload",
+//     upload.single("file"),
+//     uploadDocument
+// );
+
 router.post(
     "/upload",
-    upload.single("file"),
+    upload.array("files", 3),
     uploadDocument
 );
-
 export default router;
