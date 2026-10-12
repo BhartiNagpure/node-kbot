@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 
-const apiKey = process.env.NVIDIA_API_KEY || process.env.OPENAI_API_KEY;
+const getValidKey = (key?: string) => (key && key !== "your_api_key_here" ? key : null);
+const apiKey = getValidKey(process.env.NVIDIA_API_KEY) || getValidKey(process.env.OPENAI_API_KEY);
 
 if (!apiKey) {
   console.warn("Warning: NVIDIA_API_KEY / OPENAI_API_KEY is not defined in environment variables.");

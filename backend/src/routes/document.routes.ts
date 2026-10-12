@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { upload } from "../middleware/upload.middleware";
-import { uploadDocument } from "../controllers/document.controller";
+import { searchDocuments, uploadDocument } from "../controllers/document.controller";
 
 
 const router = Router();
@@ -16,4 +16,9 @@ router.post(
     upload.array("files", 3),
     uploadDocument
 );
+
+router.post(
+    "/search",
+    searchDocuments
+)
 export default router;

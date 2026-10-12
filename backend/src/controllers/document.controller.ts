@@ -1,5 +1,10 @@
 import { Request, Response } from "express"
 import { extractPdfText } from "../services/pdf.service";
+import { cleanText, chunkText } from "../services/text.service";
+import { createEmbedding } from "../services/embedding.service";
+import { saveChunks, ChunkRecord } from "../services/lancedb.service";
+import { searchsimilarChunk } from "../services/retrieval.service";
+
 
 export async function uploadDocument(
     req: Request,
@@ -20,13 +25,36 @@ export async function uploadDocument(
             const uploadedFiles = await Promise.all(
                 filesArray.map(async (file) => {
                     const text = await extractPdfText(file.path);
+                    const cleanedText = cleanText(text);
+                    const chunks = chunkText(cleanedText);
+
+                    const embeddings: number[][] = [];
+                    const records: ChunkRecord[] = [];
+
+                    for (let i = 0; i < chunks.length; i++) {
+                        const embedding = await createEmbedding(chunks[i]);
+                        embeddings.push(embedding);
+                        records.push({
+                            id: `${file.originalname}-${i}`,
+                            text: chunks[i],
+                            vector: embedding,
+                            fileName: file.originalname,
+                            chunkIndex: i,
+                        });
+                    }
+
+                    if (records.length > 0) {
+                        await saveChunks(records);
+                    }
+
                     return {
                         originalName: file.originalname,
                         filename: file.filename,
                         path: file.path,
                         mimetype: file.mimetype,
                         size: file.size,
-                        text,
+                        chunkCount: chunks.length,
+                        embeddingCount: embeddings.length,
                     };
                 })
             );
@@ -40,6 +68,28 @@ export async function uploadDocument(
 
         if (singleFile) {
             const text = await extractPdfText(singleFile.path);
+            const cleanedText = cleanText(text);
+            const chunks = chunkText(cleanedText);
+
+            const embeddings: number[][] = [];
+            const records: ChunkRecord[] = [];
+
+            for (let i = 0; i < chunks.length; i++) {
+                const embedding = await createEmbedding(chunks[i]);
+                embeddings.push(embedding);
+                records.push({
+                    id: `${singleFile.originalname}-${i}`,
+                    text: chunks[i],
+                    vector: embedding,
+                    fileName: singleFile.originalname,
+                    chunkIndex: i,
+                });
+            }
+
+            if (records.length > 0) {
+                await saveChunks(records);
+            }
+
             return res.status(200).json({
                 success: true,
                 message: "Document uploaded successfully",
@@ -50,7 +100,8 @@ export async function uploadDocument(
                     mimetype: singleFile.mimetype,
                     size: singleFile.size,
                 },
-                text,
+                chunkCount: chunks.length,
+                embeddingCount: embeddings.length,
             });
         }
     } catch (error: any) {
@@ -63,4 +114,38 @@ export async function uploadDocument(
     }
 }
 
+
+export async function searchDocuments(
+    req: Request,
+    res: Response
+) {
+    try {
+        const { question } = req.body;
+
+        if (!question || typeof question !== "string" || !question.trim()) {
+            return res.status(400).json({
+                success: false,
+                message: "Question is required"
+            });
+        }
+
+        const results = await searchsimilarChunk(question.trim(), 3);
+
+        return res.status(200).json({
+            success: true,
+            question,
+            resultCount: results.length,
+            results,
+
+        });
+    } catch (error: any) {
+        console.error("Document search failed", error);
+        return res.status(500).json({
+            success: false,
+            message: "Document search failed",
+            error: error?.message || "Unknown error"
+        });
+    }
+
+}
 
