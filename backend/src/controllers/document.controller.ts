@@ -22,42 +22,42 @@ export async function uploadDocument(
         }
 
         if (filesArray && filesArray.length > 0) {
-            const uploadedFiles = await Promise.all(
-                filesArray.map(async (file) => {
-                    const text = await extractPdfText(file.path);
-                    const cleanedText = cleanText(text);
-                    const chunks = chunkText(cleanedText);
+            const uploadedFiles = [];
+            const allRecords: ChunkRecord[] = [];
 
-                    const embeddings: number[][] = [];
-                    const records: ChunkRecord[] = [];
+            for (const file of filesArray) {
+                const text = await extractPdfText(file.path);
+                const cleanedText = cleanText(text);
+                const chunks = chunkText(cleanedText);
 
-                    for (let i = 0; i < chunks.length; i++) {
-                        const embedding = await createEmbedding(chunks[i]);
-                        embeddings.push(embedding);
-                        records.push({
-                            id: `${file.originalname}-${i}`,
-                            text: chunks[i],
-                            vector: embedding,
-                            fileName: file.originalname,
-                            chunkIndex: i,
-                        });
-                    }
+                const embeddings: number[][] = [];
 
-                    if (records.length > 0) {
-                        await saveChunks(records);
-                    }
+                for (let i = 0; i < chunks.length; i++) {
+                    const embedding = await createEmbedding(chunks[i]);
+                    embeddings.push(embedding);
+                    allRecords.push({
+                        id: `${file.originalname}-${i}`,
+                        text: chunks[i],
+                        vector: embedding,
+                        fileName: file.originalname,
+                        chunkIndex: i,
+                    });
+                }
 
-                    return {
-                        originalName: file.originalname,
-                        filename: file.filename,
-                        path: file.path,
-                        mimetype: file.mimetype,
-                        size: file.size,
-                        chunkCount: chunks.length,
-                        embeddingCount: embeddings.length,
-                    };
-                })
-            );
+                uploadedFiles.push({
+                    originalName: file.originalname,
+                    filename: file.filename,
+                    path: file.path,
+                    mimetype: file.mimetype,
+                    size: file.size,
+                    chunkCount: chunks.length,
+                    embeddingCount: embeddings.length,
+                });
+            }
+
+            if (allRecords.length > 0) {
+                await saveChunks(allRecords);
+            }
 
             return res.status(200).json({
                 success: true,
